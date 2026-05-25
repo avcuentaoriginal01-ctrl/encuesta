@@ -349,10 +349,24 @@
   }
   animate();
 
-  // ── Contador ──────────────────────────────────────────────────
-  let encuestaNum = parseInt(localStorage.getItem("encuestaCount")||"0");
-  if(localStorage.getItem("encuestaCount") === null) localStorage.setItem("encuestaCount","0");
-  document.getElementById("counterDisplay").textContent = encuestaNum;
+  // ── Contador — lee el total real desde Google Sheets ─────────────
+  const SHEET_URL = "https://script.google.com/macros/s/AKfycbzufGuI17lPyUznlg8uvCICJwY7hgxg0ak__sM-lZMoTVTe_0Hs4n1m5HxSfuM6uFLD/exec";
+  let encuestaNum = 0;
+
+  async function actualizarContador() {
+    try {
+      const res = await fetch(SHEET_URL + "?action=read");
+      const json = await res.json();
+      if (json.ok) {
+        encuestaNum = json.rows.length;
+        document.getElementById("counterDisplay").textContent = encuestaNum;
+      }
+    } catch(e) {
+      // Si falla la red, muestra 0
+      document.getElementById("counterDisplay").textContent = 0;
+    }
+  }
+  actualizarContador(); // ejecutar al cargar la página
 
   // Mantén presionado el contador 3 segundos para resetearlo a 0
   let holdTimer = null;
@@ -409,17 +423,20 @@
   }
 
   // ── Google Sheets ─────────────────────────────────────────────
-  // ── Google Sheets — devuelve el número asignado por el servidor ──
   async function sendToSheets(data) {
-    const SHEET_URL = "https://script.google.com/macros/s/AKfycbzufGuI17lPyUznlg8uvCICJwY7hgxg0ak__sM-lZMoTVTe_0Hs4n1m5HxSfuM6uFLD/exec";
-    const res = await fetch(SHEET_URL, {
+    await fetch(SHEET_URL, {
       method: "POST",
+      mode: "no-cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     });
-    const json = await res.json();
-    if (!json.ok) throw new Error(json.error || "Error en Sheets");
-    return json.num; // número asignado por el servidor
+    // Esperar un momento para que el Sheet procese la fila
+    await new Promise(r => setTimeout(r, 1500));
+    // Leer el total actualizado
+    const res2 = await fetch(SHEET_URL + "?action=read");
+    const json2 = await res2.json();
+    if (!json2.ok) throw new Error("Error leyendo Sheet");
+    return json2.rows.length;
   }
 
   // ── Discord ───────────────────────────────────────────────────
